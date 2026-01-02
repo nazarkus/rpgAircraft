@@ -27,21 +27,42 @@ local targetFolders = {
 local selectedTargets = {}
 local targetInstances = {}
 
+-- Основной GUI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "RPGSpammerGUI"
 screenGui.Parent = game.CoreGui
 screenGui.ResetOnSpawn = false
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 420, 0, 580)
-frame.Position = UDim2.new(0.5, -210, 0.5, -290)
-frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-frame.BorderSizePixel = 2
-frame.BorderColor3 = Color3.fromRGB(80, 80, 80)
-frame.Parent = screenGui
-frame.Active = true
-frame.Draggable = true
+-- Кнопка для разворачивания/сворачивания (сначала видна только она)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "ToggleGUI"
+toggleBtn.Text = "RPG Spammer v6.0"
+toggleBtn.Size = UDim2.new(0, 150, 0, 40)
+toggleBtn.Position = UDim2.new(0, 10, 0, 10)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+toggleBtn.BorderSizePixel = 2
+toggleBtn.BorderColor3 = Color3.fromRGB(80, 80, 80)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 14
+toggleBtn.Parent = screenGui
+toggleBtn.Active = true
+toggleBtn.Draggable = true
 
+-- Основное окно (изначально скрыто)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 420, 0, 580)
+mainFrame.Position = UDim2.new(0, 10, 0, 60)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 2
+mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+mainFrame.Visible = false
+mainFrame.Parent = screenGui
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+-- Заголовок основного окна
 local title = Instance.new("TextLabel")
 title.Text = "RPG Spammer v6.0"
 title.Size = UDim2.new(1, 0, 0, 35)
@@ -49,22 +70,36 @@ title.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 18
-title.Parent = frame
+title.Parent = mainFrame
 
+-- Кнопка закрытия основного окна
+local closeBtn = Instance.new("TextButton")
+closeBtn.Text = "✖"
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 20
+closeBtn.Parent = mainFrame
+
+-- Список целей
 local targetsFrame = Instance.new("ScrollingFrame")
 targetsFrame.Size = UDim2.new(1, -10, 0, 250)
 targetsFrame.Position = UDim2.new(0, 5, 0, 45)
 targetsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 targetsFrame.ScrollBarThickness = 5
 targetsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-targetsFrame.Parent = frame
+targetsFrame.Parent = mainFrame
 
+-- Панель управления
 local controlFrame = Instance.new("Frame")
 controlFrame.Size = UDim2.new(1, -10, 0, 200)
 controlFrame.Position = UDim2.new(0, 5, 0, 300)
 controlFrame.BackgroundTransparency = 1
-controlFrame.Parent = frame
+controlFrame.Parent = mainFrame
 
+-- Статус
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(1, -10, 0, 25)
 statusLabel.Position = UDim2.new(0, 5, 0, 505)
@@ -72,11 +107,47 @@ statusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.Font = Enum.Font.SourceSans
 statusLabel.TextSize = 14
-statusLabel.Parent = frame
+statusLabel.Parent = mainFrame
 
+-- Кнопка запуска спама
+local spamBtn = Instance.new("TextButton")
+spamBtn.Text = "▶️ START SPAM"
+spamBtn.Size = UDim2.new(1, -10, 0, 40)
+spamBtn.Position = UDim2.new(0, 5, 0, 535)
+spamBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+spamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+spamBtn.Font = Enum.Font.SourceSansBold
+spamBtn.TextSize = 18
+spamBtn.Parent = mainFrame
+
+-- Переменные состояния
 local spamActive = false
 local spamThread
 local updateThread
+local isGUIOpen = false
+
+-- Функция для сворачивания/разворачивания GUI
+local function toggleGUI()
+    isGUIOpen = not isGUIOpen
+    mainFrame.Visible = isGUIOpen
+    
+    if isGUIOpen then
+        toggleBtn.Text = "▼ RPG Spammer v6.0"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    else
+        toggleBtn.Text = "▲ RPG Spammer v6.0"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    end
+end
+
+-- Обработчики кнопок
+toggleBtn.MouseButton1Click:Connect(toggleGUI)
+
+closeBtn.MouseButton1Click:Connect(function()
+    toggleGUI() -- Просто сворачиваем GUI, а не удаляем
+end)
+
+-- Остальной код остается таким же, как в оригинале...
 
 local function scanAllTargets()
     targetInstances = {}
@@ -155,10 +226,8 @@ local function updateTargetList()
         checkBox.TextSize = 16
         checkBox.Parent = targetButton
         
-        -- Клик для выбора/снятия выбора цели
         targetButton.MouseButton1Click:Connect(function()
             if selectedTargets[target.Name] then
-                -- Снимаем выбор с цели
                 selectedTargets[target.Name] = nil
                 targetButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
                 nameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -166,7 +235,6 @@ local function updateTargetList()
                 checkBox.Text = ""
                 checkBox.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
             else
-                -- Выбираем цель
                 selectedTargets[target.Name] = {
                     Model = target.Model,
                     HRP = target.HRP,
@@ -179,7 +247,6 @@ local function updateTargetList()
                 checkBox.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
             end
             
-            -- Немедленное обновление статуса без полного рефреша
             local selectedCount = 0
             for _ in pairs(selectedTargets) do
                 selectedCount = selectedCount + 1
@@ -305,16 +372,6 @@ createControlButton("⛵ Boats", UDim2.new(0.52, 0, 0, 80), UDim2.new(0.48, 0, 0
     statusLabel.Text = "Selected: " .. selectedCount
 end)
 
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Text = "▶️ START SPAM"
-toggleBtn.Size = UDim2.new(1, -10, 0, 40)
-toggleBtn.Position = UDim2.new(0, 5, 0, 535)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Font = Enum.Font.SourceSansBold
-toggleBtn.TextSize = 18
-toggleBtn.Parent = frame
-
 local function attackVehicle(targetData)
     if not targetData or not targetData.Model then return false end
     local vehicleHRP = targetData.HRP
@@ -356,7 +413,7 @@ local function attackVehicle(targetData)
     return true
 end
 
-toggleBtn.MouseButton1Click:Connect(function()
+spamBtn.MouseButton1Click:Connect(function()
     spamActive = not spamActive
     
     if spamActive then
@@ -380,8 +437,8 @@ toggleBtn.MouseButton1Click:Connect(function()
             end
         end
         
-        toggleBtn.Text = "⏹️ STOP"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        spamBtn.Text = "⏹️ STOP"
+        spamBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         statusLabel.Text = "SPAM ACTIVE: " .. selectedCount
         
         spamThread = task.spawn(function()
@@ -396,8 +453,8 @@ toggleBtn.MouseButton1Click:Connect(function()
             end
         end)
     else
-        toggleBtn.Text = "▶️ START SPAM"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        spamBtn.Text = "▶️ START SPAM"
+        spamBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         
         local selectedCount = 0
         for _ in pairs(selectedTargets) do
@@ -411,23 +468,6 @@ toggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-local closeBtn = Instance.new("TextButton")
-closeBtn.Text = "✖"
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -35, 0, 5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Font = Enum.Font.SourceSansBold
-closeBtn.TextSize = 20
-closeBtn.Parent = frame
-
-closeBtn.MouseButton1Click:Connect(function()
-    spamActive = false
-    if spamThread then task.cancel(spamThread) end
-    if updateThread then task.cancel(updateThread) end
-    screenGui:Destroy()
-end)
-
 plr.CharacterAdded:Connect(function()
     char = plr.Character or plr.CharacterAdded:Wait()
     hrp = char:WaitForChild("HumanoidRootPart")
@@ -435,6 +475,7 @@ plr.CharacterAdded:Connect(function()
     updateTargetList()
 end)
 
+-- Инициализация
 updateTargetList()
 statusLabel.Text = "Ready"
 
@@ -442,8 +483,10 @@ statusLabel.Text = "Ready"
 updateThread = task.spawn(function()
     while true do
         task.wait(3)
-        updateTargetList()
+        if isGUIOpen then
+            updateTargetList()
+        end
     end
 end)
 
-print("✅ RPG Spammer v6.0 loaded")
+print("✅ RPG Spammer v6.0 loaded (Press small button to toggle GUI)")
