@@ -21,7 +21,9 @@ local targetFolders = {
     Helicopter = workspace["Game Systems"]["Helicopter Workspace"],
     Plane = workspace["Game Systems"]["Plane Workspace"],
     Gunship = workspace["Game Systems"]["Gunship Workspace"],
-    Boat = workspace["Game Systems"]["Boat Workspace"]
+    Boat = workspace["Game Systems"]["Boat Workspace"],
+    Tank = workspace["Game Systems"]["Tank Workspace"],
+    Hovercraft = workspace["Game Systems"]["Hovercraft Workspace"]
 }
 
 local selectedTargets = {}
@@ -33,10 +35,22 @@ screenGui.Name = "RPGSpammerGUI"
 screenGui.Parent = game.CoreGui
 screenGui.ResetOnSpawn = false
 
--- Кнопка для разворачивания/сворачивания (сначала видна только она)
+-- Переменные для перемещения
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+-- Функция для перемещения
+local function updateInput(input)
+    local delta = input.Position - dragStart
+    dragging.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+-- Кнопка для разворачивания/сворачивания
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "ToggleGUI"
-toggleBtn.Text = "RPG Spammer v6.0"
+toggleBtn.Text = "RPG Spammer v7.0"
 toggleBtn.Size = UDim2.new(0, 150, 0, 40)
 toggleBtn.Position = UDim2.new(0, 10, 0, 10)
 toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
@@ -47,12 +61,38 @@ toggleBtn.Font = Enum.Font.SourceSansBold
 toggleBtn.TextSize = 14
 toggleBtn.Parent = screenGui
 toggleBtn.Active = true
-toggleBtn.Draggable = true
+
+-- Включаем перемещение для toggleBtn
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = toggleBtn
+        dragStart = input.Position
+        startPos = toggleBtn.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = nil
+            end
+        end)
+    end
+end)
+
+toggleBtn.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+        dragInput = input
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        updateInput(input)
+    end
+end)
 
 -- Основное окно (изначально скрыто)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 420, 0, 580)
+mainFrame.Size = UDim2.new(0, 420, 0, 550)  -- Уменьшил высоту
 mainFrame.Position = UDim2.new(0, 10, 0, 60)
 mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 mainFrame.BorderSizePixel = 2
@@ -60,11 +100,31 @@ mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
 mainFrame.Visible = false
 mainFrame.Parent = screenGui
 mainFrame.Active = true
-mainFrame.Draggable = true
+
+-- Включаем перемещение для mainFrame
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = mainFrame
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = nil
+            end
+        end)
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+        dragInput = input
+    end
+end)
 
 -- Заголовок основного окна
 local title = Instance.new("TextLabel")
-title.Text = "RPG Spammer v6.0"
+title.Text = "RPG Spammer v7.0"
 title.Size = UDim2.new(1, 0, 0, 35)
 title.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -85,24 +145,24 @@ closeBtn.Parent = mainFrame
 
 -- Список целей
 local targetsFrame = Instance.new("ScrollingFrame")
-targetsFrame.Size = UDim2.new(1, -10, 0, 250)
+targetsFrame.Size = UDim2.new(1, -10, 0, 300)  -- Увеличил высоту
 targetsFrame.Position = UDim2.new(0, 5, 0, 45)
 targetsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 targetsFrame.ScrollBarThickness = 5
 targetsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 targetsFrame.Parent = mainFrame
 
--- Панель управления
+-- Панель управления (упрощенная)
 local controlFrame = Instance.new("Frame")
-controlFrame.Size = UDim2.new(1, -10, 0, 200)
-controlFrame.Position = UDim2.new(0, 5, 0, 300)
+controlFrame.Size = UDim2.new(1, -10, 0, 100)  -- Уменьшил высоту
+controlFrame.Position = UDim2.new(0, 5, 0, 350)
 controlFrame.BackgroundTransparency = 1
 controlFrame.Parent = mainFrame
 
 -- Статус
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(1, -10, 0, 25)
-statusLabel.Position = UDim2.new(0, 5, 0, 505)
+statusLabel.Position = UDim2.new(0, 5, 0, 455)
 statusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.Font = Enum.Font.SourceSans
@@ -113,7 +173,7 @@ statusLabel.Parent = mainFrame
 local spamBtn = Instance.new("TextButton")
 spamBtn.Text = "▶️ START SPAM"
 spamBtn.Size = UDim2.new(1, -10, 0, 40)
-spamBtn.Position = UDim2.new(0, 5, 0, 535)
+spamBtn.Position = UDim2.new(0, 5, 0, 485)
 spamBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 spamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 spamBtn.Font = Enum.Font.SourceSansBold
@@ -132,10 +192,10 @@ local function toggleGUI()
     mainFrame.Visible = isGUIOpen
     
     if isGUIOpen then
-        toggleBtn.Text = "▼ RPG Spammer v6.0"
+        toggleBtn.Text = "▼ RPG Spammer v7.0"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     else
-        toggleBtn.Text = "▲ RPG Spammer v6.0"
+        toggleBtn.Text = "▲ RPG Spammer v7.0"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     end
 end
@@ -144,11 +204,10 @@ end
 toggleBtn.MouseButton1Click:Connect(toggleGUI)
 
 closeBtn.MouseButton1Click:Connect(function()
-    toggleGUI() -- Просто сворачиваем GUI, а не удаляем
+    toggleGUI()
 end)
 
--- Остальной код остается таким же, как в оригинале...
-
+-- Функции
 local function scanAllTargets()
     targetInstances = {}
     for targetType, folder in pairs(targetFolders) do
@@ -188,7 +247,7 @@ local function updateTargetList()
     for _, target in ipairs(targetInstances) do
         local targetButton = Instance.new("TextButton")
         targetButton.Name = target.Name
-        targetButton.Size = UDim2.new(1, -10, 0, 45)
+        targetButton.Size = UDim2.new(1, -10, 0, 40)  -- Уменьшил высоту
         targetButton.Position = UDim2.new(0, 5, 0, yPos)
         targetButton.BackgroundColor3 = selectedTargets[target.Name] and Color3.fromRGB(0, 100, 200) or Color3.fromRGB(50, 50, 50)
         targetButton.Text = ""
@@ -202,7 +261,7 @@ local function updateTargetList()
         iconLabel.BackgroundTransparency = 1
         iconLabel.TextColor3 = selectedTargets[target.Name] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(200, 200, 200)
         iconLabel.Font = Enum.Font.SourceSansBold
-        iconLabel.TextSize = 18
+        iconLabel.TextSize = 16
         iconLabel.Parent = targetButton
         
         local nameLabel = Instance.new("TextLabel")
@@ -212,18 +271,18 @@ local function updateTargetList()
         nameLabel.BackgroundTransparency = 1
         nameLabel.TextColor3 = selectedTargets[target.Name] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
         nameLabel.Font = Enum.Font.SourceSans
-        nameLabel.TextSize = 14
+        nameLabel.TextSize = 13
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.Parent = targetButton
         
         local checkBox = Instance.new("TextLabel")
         checkBox.Text = selectedTargets[target.Name] and "✓" or ""
-        checkBox.Size = UDim2.new(0, 25, 0, 25)
-        checkBox.Position = UDim2.new(1, -30, 0.5, -12.5)
+        checkBox.Size = UDim2.new(0, 20, 0, 20)
+        checkBox.Position = UDim2.new(1, -25, 0.5, -10)
         checkBox.BackgroundColor3 = selectedTargets[target.Name] and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(70, 70, 70)
         checkBox.TextColor3 = Color3.fromRGB(255, 255, 255)
         checkBox.Font = Enum.Font.SourceSansBold
-        checkBox.TextSize = 16
+        checkBox.TextSize = 14
         checkBox.Parent = targetButton
         
         targetButton.MouseButton1Click:Connect(function()
@@ -254,7 +313,7 @@ local function updateTargetList()
             statusLabel.Text = "Selected: " .. selectedCount
         end)
         
-        yPos = yPos + 50
+        yPos = yPos + 45
     end
     
     targetsFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
@@ -273,7 +332,8 @@ local function createControlButton(text, position, size, bgColor, callback)
     btn.MouseButton1Click:Connect(callback)
 end
 
-createControlButton("✅ Select All", UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 0, 35), Color3.fromRGB(50, 150, 50), function()
+-- Только две основные кнопки вместо 6
+createControlButton("✅ Select All", UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 0, 40), Color3.fromRGB(50, 150, 50), function()
     selectedTargets = {}
     for _, target in ipairs(targetInstances) do
         selectedTargets[target.Name] = {
@@ -286,16 +346,17 @@ createControlButton("✅ Select All", UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 
     statusLabel.Text = "Selected: " .. #targetInstances
 end)
 
-createControlButton("🗑️ Clear", UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 0, 35), Color3.fromRGB(150, 50, 50), function()
+createControlButton("🗑️ Clear All", UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 0, 40), Color3.fromRGB(150, 50, 50), function()
     selectedTargets = {}
     updateTargetList()
     statusLabel.Text = "No targets selected"
 end)
 
-createControlButton("🚁 Helis", UDim2.new(0, 0, 0, 40), UDim2.new(0.48, 0, 0, 35), Color3.fromRGB(70, 150, 70), function()
+-- Кнопка для выбора воздушных целей
+createControlButton("🛩️ Air Targets", UDim2.new(0, 0, 0, 45), UDim2.new(0.48, 0, 0, 40), Color3.fromRGB(70, 100, 200), function()
     selectedTargets = {}
     for _, target in ipairs(targetInstances) do
-        if target.Type == "Helicopter" then
+        if target.Type == "Helicopter" or target.Type == "Plane" or target.Type == "Gunship" then
             selectedTargets[target.Name] = {
                 Model = target.Model,
                 HRP = target.HRP,
@@ -309,13 +370,14 @@ createControlButton("🚁 Helis", UDim2.new(0, 0, 0, 40), UDim2.new(0.48, 0, 0, 
     for _ in pairs(selectedTargets) do
         selectedCount = selectedCount + 1
     end
-    statusLabel.Text = "Selected: " .. selectedCount
+    statusLabel.Text = "Selected Air: " .. selectedCount
 end)
 
-createControlButton("✈️ Planes", UDim2.new(0.52, 0, 0, 40), UDim2.new(0.48, 0, 0, 35), Color3.fromRGB(70, 100, 200), function()
+-- Кнопка для выбора наземных/водных целей
+createControlButton("🚤 Ground/Sea", UDim2.new(0.52, 0, 0, 45), UDim2.new(0.48, 0, 0, 40), Color3.fromRGB(200, 150, 50), function()
     selectedTargets = {}
     for _, target in ipairs(targetInstances) do
-        if target.Type == "Plane" then
+        if target.Type == "Boat" or target.Type == "Tank" or target.Type == "Hovercraft" then
             selectedTargets[target.Name] = {
                 Model = target.Model,
                 HRP = target.HRP,
@@ -329,47 +391,7 @@ createControlButton("✈️ Planes", UDim2.new(0.52, 0, 0, 40), UDim2.new(0.48, 
     for _ in pairs(selectedTargets) do
         selectedCount = selectedCount + 1
     end
-    statusLabel.Text = "Selected: " .. selectedCount
-end)
-
-createControlButton("🛩️ Gunships", UDim2.new(0, 0, 0, 80), UDim2.new(0.48, 0, 0, 35), Color3.fromRGB(200, 70, 70), function()
-    selectedTargets = {}
-    for _, target in ipairs(targetInstances) do
-        if target.Type == "Gunship" then
-            selectedTargets[target.Name] = {
-                Model = target.Model,
-                HRP = target.HRP,
-                Type = target.Type
-            }
-        end
-    end
-    updateTargetList()
-    
-    local selectedCount = 0
-    for _ in pairs(selectedTargets) do
-        selectedCount = selectedCount + 1
-    end
-    statusLabel.Text = "Selected: " .. selectedCount
-end)
-
-createControlButton("⛵ Boats", UDim2.new(0.52, 0, 0, 80), UDim2.new(0.48, 0, 0, 35), Color3.fromRGB(200, 150, 50), function()
-    selectedTargets = {}
-    for _, target in ipairs(targetInstances) do
-        if target.Type == "Boat" then
-            selectedTargets[target.Name] = {
-                Model = target.Model,
-                HRP = target.HRP,
-                Type = target.Type
-            }
-        end
-    end
-    updateTargetList()
-    
-    local selectedCount = 0
-    for _ in pairs(selectedTargets) do
-        selectedCount = selectedCount + 1
-    end
-    statusLabel.Text = "Selected: " .. selectedCount
+    statusLabel.Text = "Selected Ground/Sea: " .. selectedCount
 end)
 
 local function attackVehicle(targetData)
@@ -388,12 +410,20 @@ local function attackVehicle(targetData)
     local pos = vehicleHRP.Position
     local dir = (pos - hrp.Position).Unit
     
+    -- Разная корректировка для разных типов целей
     if targetData.Type == "Boat" then
         pos = Vector3.new(pos.X, pos.Y + 3, pos.Z)
+    elseif targetData.Type == "Tank" then
+        pos = Vector3.new(pos.X, pos.Y + 1.5, pos.Z)
+    elseif targetData.Type == "Hovercraft" then
+        pos = Vector3.new(pos.X, pos.Y + 2, pos.Z)
+    elseif targetData.Type == "Plane" then
+        pos = Vector3.new(pos.X, pos.Y + 1, pos.Z)
     end
     
     fx:FireServer(tool, true)
     
+    -- Предсказание движения
     local predictedPos = pos
     if vehicleHRP.Velocity.Magnitude > 10 then
         predictedPos = pos + vehicleHRP.Velocity * 0.5
@@ -437,7 +467,7 @@ spamBtn.MouseButton1Click:Connect(function()
             end
         end
         
-        spamBtn.Text = "⏹️ STOP"
+        spamBtn.Text = "⏹️ STOP SPAM"
         spamBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         statusLabel.Text = "SPAM ACTIVE: " .. selectedCount
         
@@ -446,10 +476,10 @@ spamBtn.MouseButton1Click:Connect(function()
                 for _, targetData in pairs(selectedTargets) do
                     if spamActive then
                         attackVehicle(targetData)
-                        task.wait(0.05)
+                        task.wait(0.05)  -- Задержка между выстрелами
                     end
                 end
-                task.wait(0.1)
+                task.wait(0.1)  -- Задержка между циклами
             end
         end)
     else
@@ -477,7 +507,7 @@ end)
 
 -- Инициализация
 updateTargetList()
-statusLabel.Text = "Ready"
+statusLabel.Text = "Ready - " .. #targetInstances .. " targets found"
 
 -- Автообновление списка каждые 3 секунды
 updateThread = task.spawn(function()
@@ -489,4 +519,4 @@ updateThread = task.spawn(function()
     end
 end)
 
-print("✅ RPG Spammer v6.0 loaded (Press small button to toggle GUI)")
+print("✅ RPG Spammer v7.0 loaded (Press button to toggle GUI)")
