@@ -14,6 +14,7 @@ end
 local tool = findRPG()
 local ev = game.ReplicatedStorage.RocketSystem.Events
 local fx = ev.RocketReloadedFX
+local fire = ev.FireRocketReplicated  -- ДОБАВЛЕНО: RemoteEvent для выстрела
 local hit = ev.RocketHit
 local cnt = 0
 
@@ -92,7 +93,7 @@ end)
 -- Основное окно (изначально скрыто)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 420, 0, 550)  -- Уменьшил высоту
+mainFrame.Size = UDim2.new(0, 420, 0, 550)
 mainFrame.Position = UDim2.new(0, 10, 0, 60)
 mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 mainFrame.BorderSizePixel = 2
@@ -145,7 +146,7 @@ closeBtn.Parent = mainFrame
 
 -- Список целей
 local targetsFrame = Instance.new("ScrollingFrame")
-targetsFrame.Size = UDim2.new(1, -10, 0, 300)  -- Увеличил высоту
+targetsFrame.Size = UDim2.new(1, -10, 0, 300)
 targetsFrame.Position = UDim2.new(0, 5, 0, 45)
 targetsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 targetsFrame.ScrollBarThickness = 5
@@ -154,7 +155,7 @@ targetsFrame.Parent = mainFrame
 
 -- Панель управления (упрощенная)
 local controlFrame = Instance.new("Frame")
-controlFrame.Size = UDim2.new(1, -10, 0, 100)  -- Уменьшил высоту
+controlFrame.Size = UDim2.new(1, -10, 0, 100)
 controlFrame.Position = UDim2.new(0, 5, 0, 350)
 controlFrame.BackgroundTransparency = 1
 controlFrame.Parent = mainFrame
@@ -247,7 +248,7 @@ local function updateTargetList()
     for _, target in ipairs(targetInstances) do
         local targetButton = Instance.new("TextButton")
         targetButton.Name = target.Name
-        targetButton.Size = UDim2.new(1, -10, 0, 40)  -- Уменьшил высоту
+        targetButton.Size = UDim2.new(1, -10, 0, 40)
         targetButton.Position = UDim2.new(0, 5, 0, yPos)
         targetButton.BackgroundColor3 = selectedTargets[target.Name] and Color3.fromRGB(0, 100, 200) or Color3.fromRGB(50, 50, 50)
         targetButton.Text = ""
@@ -332,7 +333,7 @@ local function createControlButton(text, position, size, bgColor, callback)
     btn.MouseButton1Click:Connect(callback)
 end
 
--- Только две основные кнопки вместо 6
+-- Кнопки управления
 createControlButton("✅ Select All", UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 0, 40), Color3.fromRGB(50, 150, 50), function()
     selectedTargets = {}
     for _, target in ipairs(targetInstances) do
@@ -352,7 +353,6 @@ createControlButton("🗑️ Clear All", UDim2.new(0.52, 0, 0, 0), UDim2.new(0.4
     statusLabel.Text = "No targets selected"
 end)
 
--- Кнопка для выбора воздушных целей
 createControlButton("🛩️ Air Targets", UDim2.new(0, 0, 0, 45), UDim2.new(0.48, 0, 0, 40), Color3.fromRGB(70, 100, 200), function()
     selectedTargets = {}
     for _, target in ipairs(targetInstances) do
@@ -373,7 +373,6 @@ createControlButton("🛩️ Air Targets", UDim2.new(0, 0, 0, 45), UDim2.new(0.4
     statusLabel.Text = "Selected Air: " .. selectedCount
 end)
 
--- Кнопка для выбора наземных/водных целей
 createControlButton("🚤 Ground/Sea", UDim2.new(0.52, 0, 0, 45), UDim2.new(0.48, 0, 0, 40), Color3.fromRGB(200, 150, 50), function()
     selectedTargets = {}
     for _, target in ipairs(targetInstances) do
@@ -394,6 +393,7 @@ createControlButton("🚤 Ground/Sea", UDim2.new(0.52, 0, 0, 45), UDim2.new(0.48
     statusLabel.Text = "Selected Ground/Sea: " .. selectedCount
 end)
 
+-- ИСПРАВЛЕННАЯ ФУНКЦИЯ АТАКИ
 local function attackVehicle(targetData)
     if not targetData or not targetData.Model then return false end
     local vehicleHRP = targetData.HRP
@@ -410,7 +410,7 @@ local function attackVehicle(targetData)
     local pos = vehicleHRP.Position
     local dir = (pos - hrp.Position).Unit
     
-    -- Разная корректировка для разных типов целей
+    -- Корректировка высоты для разных типов целей
     if targetData.Type == "Boat" then
         pos = Vector3.new(pos.X, pos.Y + 3, pos.Z)
     elseif targetData.Type == "Tank" then
@@ -421,23 +421,55 @@ local function attackVehicle(targetData)
         pos = Vector3.new(pos.X, pos.Y + 1, pos.Z)
     end
     
-    fx:FireServer(tool, true)
+    -- 1. Визуальный эффект (перезарядка)
+    fx:FireServer(tool, false)
     
-    -- Предсказание движения
-    local predictedPos = pos
-    if vehicleHRP.Velocity.Magnitude > 10 then
-        predictedPos = pos + vehicleHRP.Velocity * 0.5
-    end
+    -- 2. ВЫСТРЕЛ РАКЕТЫ (FireRocketReplicated) - ДОБАВЛЕНО
+    fire:FireServer({
+        ["Direction"] = dir,
+        ["Settings"] = {
+            ["expShake"] = {
+                ["fadeInTime"] = 0.05,
+                ["magnitude"] = 3,
+                ["rotInfluence"] = Vector3.new(0.4, 0, 0.4),
+                ["fadeOutTime"] = 0.5,
+                ["posInfluence"] = Vector3.new(1, 1, 0),
+                ["roughness"] = 3,
+            },
+            ["gravity"] = Vector3.new(0, -20, 0),
+            ["HelicopterDamage"] = 450,
+            ["FireRate"] = 15,
+            ["VehicleDamage"] = 350,
+            ["ExpName"] = "RPG",
+            ["RocketAmount"] = 1,
+            ["ExpRadius"] = 12,
+            ["BoatDamage"] = 300,
+            ["TankDamage"] = 300,
+            ["Acceleration"] = 8,
+            ["ShieldDamage"] = 170,
+            ["Distance"] = 4000,
+            ["PlaneDamage"] = 500,
+            ["GunshipDamage"] = 170,
+            ["velocity"] = 200,
+            ["ExplosionDamage"] = 120,
+        },
+        ["Origin"] = hrp.Position,
+        ["PlrFired"] = plr,
+        ["Vehicle"] = tool,
+        ["RocketModel"] = game.ReplicatedStorage.RocketSystem.Rockets["RPG Rocket"],
+        ["Weapon"] = tool,
+    })
     
-    hit:FireServer(
-        Vector3.new(predictedPos.X, predictedPos.Y, predictedPos.Z),
-        Vector3.new(dir.X, dir.Y, dir.Z),
-        tool,
-        tool,
-        vehicleHRP,
-        nil,
-        plr.Name .. "Rocket" .. cnt
-    )
+    -- 3. Нанесение урона (RocketHit)
+    hit:FireServer({
+        ["Normal"] = Vector3.new(0, 1, 0),
+        ["HitPart"] = vehicleHRP,
+        ["Position"] = pos,
+        ["Label"] = plr.Name .. "Rocket" .. cnt,
+        ["Vehicle"] = tool,
+        ["Player"] = plr,
+        ["Weapon"] = tool,
+    })
     
     cnt = cnt + 1
     return true
