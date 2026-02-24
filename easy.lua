@@ -22,13 +22,11 @@ local cnt = 0
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
 
 local gradientTime = 0
 local currentGradientColor = Color3.fromRGB(100, 120, 200)
 
--- ═══════════════════════════════════════
--- ЦВЕТА
--- ═══════════════════════════════════════
 local C = {
     Bg       = Color3.fromRGB(8, 10, 18),
     Sec      = Color3.fromRGB(12, 15, 28),
@@ -45,11 +43,11 @@ local C = {
     Glow     = Color3.fromRGB(100, 80, 220),
     Air      = Color3.fromRGB(60, 90, 160),
     Ground   = Color3.fromRGB(160, 120, 50),
+    Owner    = Color3.fromRGB(180, 140, 220),
+    Base     = Color3.fromRGB(100, 180, 140),
+    NoOwner  = Color3.fromRGB(80, 90, 110),
 }
 
--- ═══════════════════════════════════════
--- ПАПКИ ТРАНСПОРТА
--- ═══════════════════════════════════════
 local targetFolders = {
     Helicopter = workspace["Game Systems"]["Helicopter Workspace"],
     Plane      = workspace["Game Systems"]["Plane Workspace"],
@@ -57,11 +55,6 @@ local targetFolders = {
     Boat       = workspace["Game Systems"]["Boat Workspace"],
     Tank       = workspace["Game Systems"]["Tank Workspace"],
     Hovercraft = workspace["Game Systems"]["Hovercraft Workspace"],
-}
-
-local vIcons = {
-    Helicopter = "🚁", Plane = "✈️", Gunship = "💥",
-    Boat = "🚤", Tank = "🏗️", Hovercraft = "🛥️",
 }
 
 local vColors = {
@@ -73,14 +66,20 @@ local vColors = {
     Hovercraft = Color3.fromRGB(130, 100, 180),
 }
 
+local vShort = {
+    Helicopter = "HELI",
+    Plane      = "PLANE",
+    Gunship    = "GNSHP",
+    Boat       = "BOAT",
+    Tank       = "TANK",
+    Hovercraft = "HOVER",
+}
+
 local selectedTargets = {}
 local targetInstances = {}
 local vehicleElements = {}
 local syncedButtons = {}
 
--- ═══════════════════════════════════════
--- УТИЛИТЫ
--- ═══════════════════════════════════════
 local function lerp3(a, b, t)
     return Color3.new(a.R+(b.R-a.R)*t, a.G+(b.G-a.G)*t, a.B+(b.B-a.B)*t)
 end
@@ -127,38 +126,94 @@ local function hoverFx(btn, base)
     return d
 end
 
--- ═══════════════════════════════════════
--- СКАНИРОВАНИЕ ТРАНСПОРТА
--- ═══════════════════════════════════════
+-- =====================
+-- ПОЛУЧЕНИЕ ДАННЫХ О ВЛАДЕЛЬЦЕ (WAR TYCOON)
+-- =====================
+local function getOwnerData(model)
+    local data = {
+        username = nil,
+        displayName = nil,
+        base = nil
+    }
+    
+    pcall(function()
+        -- Owner из атрибута
+        local owner = model:GetAttribute("Owner")
+        if owner and type(owner) == "string" and owner ~= "" then
+            data.username = owner
+        end
+        
+        -- Если нет Owner, пробуем Pilot
+        if not data.username then
+            local pilot = model:GetAttribute("Pilot")
+            if pilot and type(pilot) == "string" and pilot ~= "" then
+                data.username = pilot
+            end
+        end
+        
+        -- Если нет Pilot, пробуем KillOwner
+        if not data.username then
+            local killOwner = model:GetAttribute("KillOwner")
+            if killOwner and type(killOwner) == "string" and killOwner ~= "" then
+                data.username = killOwner
+            end
+        end
+        
+        -- Получаем DisplayName и Team (база) из объекта игрока
+        if data.username then
+            local player = Players:FindFirstChild(data.username)
+            if player then
+                data.displayName = player.DisplayName
+                if player.Team then
+                    data.base = player.Team.Name
+                end
+            else
+                data.displayName = data.username
+            end
+        end
+    end)
+    
+    return data
+end
+
+-- =====================
+-- СКАНИРОВАНИЕ
+-- =====================
 local function scanVehicles()
     targetInstances = {}
     for typ, folder in pairs(targetFolders) do
         if folder then
-            for _, mdl in ipairs(folder:GetChildren()) do
-                if mdl:IsA("Model") then
-                    local part = mdl:FindFirstChild("HumanoidRootPart")
-                        or mdl:FindFirstChild("Main")
-                        or mdl:FindFirstChild("RootPart")
-                        or mdl:FindFirstChild("Head")
-                        or mdl.PrimaryPart
-                    if part then
-                        table.insert(targetInstances, {
-                            Name = mdl.Name,
-                            Type = typ,
-                            Model = mdl,
-                            HRP = part,
-                        })
+            pcall(function()
+                for _, mdl in ipairs(folder:GetChildren()) do
+                    if mdl:IsA("Model") then
+                        local part = mdl:FindFirstChild("HumanoidRootPart")
+                            or mdl:FindFirstChild("Main")
+                            or mdl:FindFirstChild("RootPart")
+                            or mdl:FindFirstChild("Head")
+                            or mdl.PrimaryPart
+                        if part then
+                            local ownerData = getOwnerData(mdl)
+                            table.insert(targetInstances, {
+                                Name = mdl.Name,
+                                Type = typ,
+                                Model = mdl,
+                                HRP = part,
+                                Username = ownerData.username,
+                                DisplayName = ownerData.displayName,
+                                Base = ownerData.base,
+                            })
+                        end
                     end
                 end
-            end
+            end)
         end
     end
     return #targetInstances
 end
 
--- ═══════════════════════════════════════
--- ОСНОВНОЙ GUI
--- ═══════════════════════════════════════
+-- =====================
+-- GUI
+-- =====================
 local gui = Instance.new("ScreenGui")
 gui.Name = "RPGVehicleGUI"
 gui.Parent = game.CoreGui
@@ -167,8 +222,8 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "Main"
-mainFrame.Size = UDim2.new(0, 380, 0, 560)
-mainFrame.Position = UDim2.new(0.5, -190, 0.5, -280)
+mainFrame.Size = UDim2.new(0, 400, 0, 560)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -280)
 mainFrame.BackgroundColor3 = C.Bg
 mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
@@ -179,9 +234,7 @@ shadow(mainFrame)
 
 local glow, glowStroke = innerGlow(mainFrame, C.Glow)
 
--- ═══════════════════════════════════════
 -- АНИМИРОВАННЫЙ ФОН
--- ═══════════════════════════════════════
 local gc = Instance.new("Frame")
 gc.Size=UDim2.new(1,0,1,0); gc.BackgroundTransparency=1; gc.ClipsDescendants=true
 gc.ZIndex=0; gc.Parent=mainFrame; corner(gc,20)
@@ -268,9 +321,7 @@ local animConn = RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- ═══════════════════════════════════════
 -- ЗАГОЛОВОК
--- ═══════════════════════════════════════
 local titleBar = Instance.new("Frame")
 titleBar.Size=UDim2.new(1,0,0,55); titleBar.BackgroundTransparency=1
 titleBar.ZIndex=2; titleBar.Parent=mainFrame
@@ -301,8 +352,8 @@ iBg.BackgroundColor3=C.Ter; iBg.BackgroundTransparency=0.2; iBg.ZIndex=2; iBg.Pa
 corner(iBg,12)
 
 local iLbl = Instance.new("TextLabel")
-iLbl.Text="🚀"; iLbl.Size=UDim2.new(1,0,1,0); iLbl.BackgroundTransparency=1
-iLbl.TextSize=20; iLbl.Font=Enum.Font.SourceSans; iLbl.ZIndex=3; iLbl.Parent=iBg
+iLbl.Text="RPG"; iLbl.Size=UDim2.new(1,0,1,0); iLbl.BackgroundTransparency=1
+iLbl.TextColor3=C.Txt; iLbl.TextSize=12; iLbl.Font=Enum.Font.GothamBlack; iLbl.ZIndex=3; iLbl.Parent=iBg
 
 local tLbl = Instance.new("TextLabel")
 tLbl.Text="RPG Vehicle Spammer"; tLbl.Size=UDim2.new(1,-130,0,24); tLbl.Position=UDim2.new(0,60,0,10)
@@ -315,7 +366,7 @@ vBg.BackgroundColor3=C.Check; vBg.BackgroundTransparency=0.2; vBg.ZIndex=2; vBg.
 corner(vBg,9)
 
 local vLbl = Instance.new("TextLabel")
-vLbl.Text="v7.0"; vLbl.Size=UDim2.new(1,0,1,0); vLbl.BackgroundTransparency=1
+vLbl.Text="v7.3"; vLbl.Size=UDim2.new(1,0,1,0); vLbl.BackgroundTransparency=1
 vLbl.TextColor3=C.Txt; vLbl.Font=Enum.Font.GothamBold; vLbl.TextSize=10; vLbl.ZIndex=3; vLbl.Parent=vBg
 
 local bCont = Instance.new("Frame")
@@ -324,25 +375,22 @@ bCont.BackgroundColor3=C.Sec; bCont.BackgroundTransparency=0.2; bCont.ZIndex=2; 
 corner(bCont,10)
 
 local closeBtn = Instance.new("TextButton")
-closeBtn.Text="×"; closeBtn.Size=UDim2.new(0,30,0,28); closeBtn.Position=UDim2.new(1,-33,0.5,-14)
+closeBtn.Text="X"; closeBtn.Size=UDim2.new(0,30,0,28); closeBtn.Position=UDim2.new(1,-33,0.5,-14)
 closeBtn.BackgroundColor3=C.Bad; closeBtn.BackgroundTransparency=0.3; closeBtn.TextColor3=C.Txt
-closeBtn.Font=Enum.Font.GothamBold; closeBtn.TextSize=18; closeBtn.ZIndex=3; closeBtn.Parent=bCont
+closeBtn.Font=Enum.Font.GothamBold; closeBtn.TextSize=16; closeBtn.ZIndex=3; closeBtn.Parent=bCont
 corner(closeBtn,8); hoverFx(closeBtn,C.Bad)
 
 local minBtn = Instance.new("TextButton")
-minBtn.Text="−"; minBtn.Size=UDim2.new(0,30,0,28); minBtn.Position=UDim2.new(0,3,0.5,-14)
+minBtn.Text="-"; minBtn.Size=UDim2.new(0,30,0,28); minBtn.Position=UDim2.new(0,3,0.5,-14)
 minBtn.BackgroundColor3=C.Ter; minBtn.BackgroundTransparency=0.2; minBtn.TextColor3=C.Txt
 minBtn.Font=Enum.Font.GothamBold; minBtn.TextSize=18; minBtn.ZIndex=3; minBtn.Parent=bCont
 corner(minBtn,8); hoverFx(minBtn,C.Ter)
 
--- ═══════════════════════════════════════
 -- КОНТЕНТ
--- ═══════════════════════════════════════
 local content = Instance.new("Frame")
 content.Name="Content"; content.Size=UDim2.new(1,-28,1,-65); content.Position=UDim2.new(0,14,0,60)
 content.BackgroundTransparency=1; content.ZIndex=2; content.Parent=mainFrame
 
--- Секция списка
 local listSec = Instance.new("Frame")
 listSec.Size=UDim2.new(1,0,0,260); listSec.BackgroundColor3=C.Card; listSec.BackgroundTransparency=0.15
 listSec.BorderSizePixel=0; listSec.ZIndex=2; listSec.Parent=content
@@ -352,7 +400,7 @@ local hdr = Instance.new("Frame")
 hdr.Size=UDim2.new(1,0,0,36); hdr.BackgroundTransparency=1; hdr.ZIndex=3; hdr.Parent=listSec
 
 local hdrLbl = Instance.new("TextLabel")
-hdrLbl.Text="🎯 VEHICLES"; hdrLbl.Size=UDim2.new(0.5,0,1,0); hdrLbl.Position=UDim2.new(0,14,0,0)
+hdrLbl.Text="VEHICLES"; hdrLbl.Size=UDim2.new(0.5,0,1,0); hdrLbl.Position=UDim2.new(0,14,0,0)
 hdrLbl.BackgroundTransparency=1; hdrLbl.TextColor3=C.Dim; hdrLbl.Font=Enum.Font.GothamBold
 hdrLbl.TextSize=11; hdrLbl.TextXAlignment=Enum.TextXAlignment.Left; hdrLbl.ZIndex=3; hdrLbl.Parent=hdr
 
@@ -372,7 +420,6 @@ local pad = Instance.new("UIPadding")
 pad.PaddingTop=UDim.new(0,2); pad.PaddingBottom=UDim.new(0,2)
 pad.PaddingLeft=UDim.new(0,2); pad.PaddingRight=UDim.new(0,2); pad.Parent=scroll
 
--- Статус
 local statBar = Instance.new("Frame")
 statBar.Size=UDim2.new(1,0,0,32); statBar.Position=UDim2.new(0,0,0,268)
 statBar.BackgroundColor3=C.Card; statBar.BackgroundTransparency=0.15; statBar.ZIndex=2; statBar.Parent=content
@@ -386,20 +433,20 @@ local function updStatus()
     local n = 0
     for _ in pairs(selectedTargets) do n=n+1 end
     if n==0 then
-        statLbl.Text="✨ No targets selected"; statLbl.TextColor3=C.Dim
+        statLbl.Text="No targets selected"; statLbl.TextColor3=C.Dim
     else
-        statLbl.Text="✅ "..n.." target"..(n>1 and "s" or "").." selected"; statLbl.TextColor3=C.Check
+        statLbl.Text=n.." target"..(n>1 and "s" or "").." selected"; statLbl.TextColor3=C.Check
     end
 end
 
--- ═══════════════════════════════════════
+-- =====================
 -- ЭЛЕМЕНТ ТРАНСПОРТА
--- ═══════════════════════════════════════
+-- =====================
 local function makeVehicleRow(tgt)
     local mdl = tgt.Model
 
     local row = Instance.new("Frame")
-    row.Name=tgt.Name; row.Size=UDim2.new(1,-4,0,44); row.BackgroundColor3=C.Sec
+    row.Name=tgt.Name; row.Size=UDim2.new(1,-4,0,48); row.BackgroundColor3=C.Sec
     row.BackgroundTransparency=0.2; row.BorderSizePixel=0; row.ZIndex=4; row.Parent=scroll
     corner(row,10)
 
@@ -413,30 +460,52 @@ local function makeVehicleRow(tgt)
     cm.Font=Enum.Font.GothamBold; cm.TextSize=14; cm.ZIndex=6; cm.Parent=cb
 
     local badge = Instance.new("Frame")
-    badge.Size=UDim2.new(0,30,0,30); badge.Position=UDim2.new(0,38,0.5,-15)
+    badge.Size=UDim2.new(0,38,0,30); badge.Position=UDim2.new(0,38,0.5,-15)
     badge.BackgroundColor3=vColors[tgt.Type] or C.Ter; badge.BackgroundTransparency=0.3
-    badge.ZIndex=5; badge.Parent=row; corner(badge,10)
+    badge.ZIndex=5; badge.Parent=row; corner(badge,8)
 
-    local bIcon = Instance.new("TextLabel")
-    bIcon.Text=vIcons[tgt.Type] or "🎯"; bIcon.Size=UDim2.new(1,0,1,0)
-    bIcon.BackgroundTransparency=1; bIcon.TextSize=16; bIcon.Font=Enum.Font.SourceSans
-    bIcon.ZIndex=6; bIcon.Parent=badge
+    local bText = Instance.new("TextLabel")
+    bText.Text=vShort[tgt.Type] or "??"; bText.Size=UDim2.new(1,0,1,0)
+    bText.BackgroundTransparency=1; bText.TextColor3=C.Txt; bText.TextSize=8
+    bText.Font=Enum.Font.GothamBlack; bText.ZIndex=6; bText.Parent=badge
 
     local nc = Instance.new("Frame")
-    nc.Size=UDim2.new(1,-80,1,0); nc.Position=UDim2.new(0,76,0,0)
+    nc.Size=UDim2.new(1,-86,1,0); nc.Position=UDim2.new(0,82,0,0)
     nc.BackgroundTransparency=1; nc.ZIndex=5; nc.Parent=row
 
+    -- Строка 1: название техники
     local nl = Instance.new("TextLabel")
-    nl.Text=tgt.Name; nl.Size=UDim2.new(1,0,0.55,0); nl.Position=UDim2.new(0,0,0,4)
+    nl.Text=tgt.Name; nl.Size=UDim2.new(1,0,0,16); nl.Position=UDim2.new(0,0,0,5)
     nl.BackgroundTransparency=1; nl.TextColor3=C.Txt; nl.Font=Enum.Font.GothamBold
     nl.TextSize=13; nl.TextXAlignment=Enum.TextXAlignment.Left
     nl.TextTruncate=Enum.TextTruncate.AtEnd; nl.ZIndex=6; nl.Parent=nc
 
-    local tl = Instance.new("TextLabel")
-    tl.Text=tgt.Type; tl.Size=UDim2.new(1,0,0.45,0); tl.Position=UDim2.new(0,0,0.5,2)
-    tl.BackgroundTransparency=1; tl.TextColor3=vColors[tgt.Type] or C.Mute
-    tl.Font=Enum.Font.Gotham; tl.TextSize=10; tl.TextXAlignment=Enum.TextXAlignment.Left
-    tl.ZIndex=6; tl.Parent=nc
+    -- Строка 2: displayName   base
+    local ol = Instance.new("TextLabel")
+    ol.Name = "InfoLine"
+    ol.Size=UDim2.new(1,0,0,14); ol.Position=UDim2.new(0,0,0,24)
+    ol.BackgroundTransparency=1; ol.Font=Enum.Font.Gotham
+    ol.TextSize=10; ol.TextXAlignment=Enum.TextXAlignment.Left
+    ol.TextTruncate=Enum.TextTruncate.AtEnd; ol.ZIndex=6; ol.Parent=nc
+    ol.RichText = true
+
+    -- Цвета для RichText
+    local ownerHex = string.format("#%02X%02X%02X",
+        math.floor(C.Owner.R*255), math.floor(C.Owner.G*255), math.floor(C.Owner.B*255))
+    local baseHex = string.format("#%02X%02X%02X",
+        math.floor(C.Base.R*255), math.floor(C.Base.G*255), math.floor(C.Base.B*255))
+    local muteHex = string.format("#%02X%02X%02X",
+        math.floor(C.NoOwner.R*255), math.floor(C.NoOwner.G*255), math.floor(C.NoOwner.B*255))
+
+    if tgt.DisplayName and tgt.DisplayName ~= "" then
+        local txt = '<font color="'..ownerHex..'">'..tgt.DisplayName..'</font>'
+        if tgt.Base and tgt.Base ~= "" then
+            txt = txt .. '   <font color="'..baseHex..'">'..tgt.Base..'</font>'
+        end
+        ol.Text = txt
+    else
+        ol.Text = '<font color="'..muteHex..'">No owner</font>'
+    end
 
     local btn = Instance.new("TextButton")
     btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1; btn.Text=""
@@ -474,9 +543,9 @@ local function makeVehicleRow(tgt)
     vehicleElements[mdl] = {row=row, rd=rd, vis=vis, tgt=tgt}
 end
 
--- ═══════════════════════════════════════
+-- =====================
 -- ОБНОВЛЕНИЕ СПИСКА
--- ═══════════════════════════════════════
+-- =====================
 local function refreshList()
     for m, e in pairs(vehicleElements) do
         for i=#syncedButtons,1,-1 do
@@ -501,22 +570,20 @@ local function refreshList()
         if selectedTargets[t.Model] then vehicleElements[t.Model].vis() end
     end
 
-    cntLbl.Text = "🚗 "..#targetInstances.." found"
+    cntLbl.Text = #targetInstances.." found"
     task.defer(function()
         scroll.CanvasSize = UDim2.new(0,0,0, lay.AbsoluteContentSize.Y+10)
     end)
     updStatus()
 end
 
--- ═══════════════════════════════════════
--- КНОПКИ УПРАВЛЕНИЯ — РЯД 1
--- ═══════════════════════════════════════
+-- КНОПКИ РЯД 1
 local r1 = Instance.new("Frame")
 r1.Size=UDim2.new(1,0,0,34); r1.Position=UDim2.new(0,0,0,308)
 r1.BackgroundTransparency=1; r1.ZIndex=2; r1.Parent=content
 
 local sa = Instance.new("TextButton")
-sa.Text="✅ Select All"; sa.Size=UDim2.new(0.48,0,1,0); sa.BackgroundColor3=C.Ter
+sa.Text="Select All"; sa.Size=UDim2.new(0.48,0,1,0); sa.BackgroundColor3=C.Ter
 sa.BackgroundTransparency=0.1; sa.TextColor3=C.Txt; sa.Font=Enum.Font.GothamBold
 sa.TextSize=11; sa.ZIndex=2; sa.Parent=r1; corner(sa,10); stroke(sa,C.Brd,1,0.4); hoverFx(sa,C.Ter)
 
@@ -529,7 +596,7 @@ sa.MouseButton1Click:Connect(function()
 end)
 
 local ca = Instance.new("TextButton")
-ca.Text="🗑️ Clear All"; ca.Size=UDim2.new(0.48,0,1,0); ca.Position=UDim2.new(0.52,0,0,0)
+ca.Text="Clear All"; ca.Size=UDim2.new(0.48,0,1,0); ca.Position=UDim2.new(0.52,0,0,0)
 ca.BackgroundColor3=C.Ter; ca.BackgroundTransparency=0.1; ca.TextColor3=C.Txt
 ca.Font=Enum.Font.GothamBold; ca.TextSize=11; ca.ZIndex=2; ca.Parent=r1
 corner(ca,10); stroke(ca,C.Brd,1,0.4); hoverFx(ca,C.Ter)
@@ -540,13 +607,13 @@ ca.MouseButton1Click:Connect(function()
     updStatus()
 end)
 
--- КНОПКИ — РЯД 2
+-- КНОПКИ РЯД 2
 local r2 = Instance.new("Frame")
 r2.Size=UDim2.new(1,0,0,34); r2.Position=UDim2.new(0,0,0,348)
 r2.BackgroundTransparency=1; r2.ZIndex=2; r2.Parent=content
 
 local ab = Instance.new("TextButton")
-ab.Text="🛩️ Air Only"; ab.Size=UDim2.new(0.48,0,1,0); ab.BackgroundColor3=C.Air
+ab.Text="Air Only"; ab.Size=UDim2.new(0.48,0,1,0); ab.BackgroundColor3=C.Air
 ab.BackgroundTransparency=0.15; ab.TextColor3=C.Txt; ab.Font=Enum.Font.GothamBold
 ab.TextSize=11; ab.ZIndex=2; ab.Parent=r2; corner(ab,10); stroke(ab,C.Brd,1,0.4); hoverFx(ab,C.Air)
 
@@ -563,7 +630,7 @@ ab.MouseButton1Click:Connect(function()
 end)
 
 local gb = Instance.new("TextButton")
-gb.Text="🚤 Ground/Sea"; gb.Size=UDim2.new(0.48,0,1,0); gb.Position=UDim2.new(0.52,0,0,0)
+gb.Text="Ground / Sea"; gb.Size=UDim2.new(0.48,0,1,0); gb.Position=UDim2.new(0.52,0,0,0)
 gb.BackgroundColor3=C.Ground; gb.BackgroundTransparency=0.15; gb.TextColor3=C.Txt
 gb.Font=Enum.Font.GothamBold; gb.TextSize=11; gb.ZIndex=2; gb.Parent=r2
 corner(gb,10); stroke(gb,C.Brd,1,0.4); hoverFx(gb,C.Ground)
@@ -580,14 +647,12 @@ gb.MouseButton1Click:Connect(function()
     updStatus()
 end)
 
--- ═══════════════════════════════════════
--- КНОПКА СТАРТ/СТОП
--- ═══════════════════════════════════════
+-- СТАРТ / СТОП
 local spamOn = false
 local threads = {}
 
 local goBtn = Instance.new("TextButton")
-goBtn.Text="⚡️ START"; goBtn.Size=UDim2.new(1,0,0,52); goBtn.Position=UDim2.new(0,0,0,390)
+goBtn.Text="START"; goBtn.Size=UDim2.new(1,0,0,52); goBtn.Position=UDim2.new(0,0,0,390)
 goBtn.BackgroundColor3=C.Bad; goBtn.BackgroundTransparency=0.05; goBtn.TextColor3=C.Txt
 goBtn.Font=Enum.Font.GothamBlack; goBtn.TextSize=16; goBtn.ZIndex=2; goBtn.Parent=content
 corner(goBtn,14)
@@ -604,14 +669,14 @@ goGS.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; goGS.Parent=goGlow
 corner(goGlow,16)
 
 local infoLbl = Instance.new("TextLabel")
-infoLbl.Text="🔄 Auto-refresh 3s | Select vehicles then START"
+infoLbl.Text="Auto-refresh 3s  |  DisplayName + Base"
 infoLbl.Size=UDim2.new(1,0,0,22); infoLbl.Position=UDim2.new(0,0,0,448)
 infoLbl.BackgroundTransparency=1; infoLbl.TextColor3=C.Mute; infoLbl.Font=Enum.Font.Gotham
 infoLbl.TextSize=10; infoLbl.ZIndex=2; infoLbl.Parent=content
 
--- ═══════════════════════════════════════
+-- =====================
 -- АТАКА ПО ТРАНСПОРТУ
--- ═══════════════════════════════════════
+-- =====================
 local function attackVehicle(td)
     if not td or not td.Model or not td.Model.Parent then return false end
     local vH = td.HRP
@@ -625,7 +690,6 @@ local function attackVehicle(td)
     local pos = vH.Position
     local dir = (pos - hrp.Position).Unit
 
-    -- Коррекция высоты
     if td.Type == "Boat" then
         pos = pos + Vector3.new(0, 3, 0)
     elseif td.Type == "Tank" then
@@ -636,10 +700,8 @@ local function attackVehicle(td)
         pos = pos + Vector3.new(0, 1, 0)
     end
 
-    -- 1) Перезарядка
     pcall(function() fx:FireServer(tool, false) end)
 
-    -- 2) Выстрел ракеты
     pcall(function()
         fire:FireServer({
             ["Direction"] = dir,
@@ -676,7 +738,6 @@ local function attackVehicle(td)
         })
     end)
 
-    -- 3) Удар по транспорту
     pcall(function()
         hit:FireServer({
             ["Normal"] = Vector3.new(0, 1, 0),
@@ -693,9 +754,7 @@ local function attackVehicle(td)
     return true
 end
 
--- ═══════════════════════════════════════
--- СТАРТ / СТОП
--- ═══════════════════════════════════════
+-- СТАРТ / СТОП ЛОГИКА
 goBtn.MouseButton1Click:Connect(function()
     spamOn = not spamOn
 
@@ -704,23 +763,23 @@ goBtn.MouseButton1Click:Connect(function()
         for _ in pairs(selectedTargets) do n=n+1 end
 
         if n == 0 then
-            statLbl.Text="❌ Select targets first!"; statLbl.TextColor3=C.Bad
+            statLbl.Text="Select targets first!"; statLbl.TextColor3=C.Bad
             spamOn = false; return
         end
 
         if not tool then
             tool = findRPG()
             if not tool then
-                statLbl.Text="❌ Need RPG!"; statLbl.TextColor3=C.Bad
+                statLbl.Text="Need RPG!"; statLbl.TextColor3=C.Bad
                 spamOn = false; return
             end
         end
 
-        goBtn.Text="⏹️ STOP"
+        goBtn.Text="STOP"
         TweenService:Create(goBtn,TweenInfo.new(0.25),{BackgroundColor3=C.Ok}):Play()
         TweenService:Create(goStroke,TweenInfo.new(0.25),{Color=C.Ok}):Play()
         TweenService:Create(goGS,TweenInfo.new(0.25),{Color=C.Ok,Transparency=0.4}):Play()
-        statLbl.Text="🔥 Active — "..n.." target"..(n>1 and "s" or "")
+        statLbl.Text="Active -- "..n.." target"..(n>1 and "s" or "")
         statLbl.TextColor3=C.Ok
 
         threads["main"] = task.spawn(function()
@@ -748,20 +807,18 @@ goBtn.MouseButton1Click:Connect(function()
             end)
         end
     else
-        goBtn.Text="⚡️ START"
+        goBtn.Text="START"
         TweenService:Create(goBtn,TweenInfo.new(0.25),{BackgroundColor3=C.Bad}):Play()
         TweenService:Create(goStroke,TweenInfo.new(0.25),{Color=C.Bad}):Play()
         TweenService:Create(goGS,TweenInfo.new(0.25),{Color=C.Bad,Transparency=0.6}):Play()
-        statLbl.Text="💤 Stopped"; statLbl.TextColor3=C.Dim
+        statLbl.Text="Stopped"; statLbl.TextColor3=C.Dim
 
         for _,th in pairs(threads) do pcall(task.cancel,th) end
         threads = {}
     end
 end)
 
--- ═══════════════════════════════════════
 -- ЗАКРЫТЬ / СВЕРНУТЬ
--- ═══════════════════════════════════════
 closeBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
 end)
@@ -772,21 +829,19 @@ local origSize = mainFrame.Size
 minBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
     if minimized then
-        TweenService:Create(mainFrame,TweenInfo.new(0.3,Enum.EasingStyle.Quart),{Size=UDim2.new(0,380,0,60)}):Play()
+        TweenService:Create(mainFrame,TweenInfo.new(0.3,Enum.EasingStyle.Quart),{Size=UDim2.new(0,400,0,60)}):Play()
         minBtn.Text="+"; content.Visible=false
     else
         TweenService:Create(mainFrame,TweenInfo.new(0.3,Enum.EasingStyle.Quart),{Size=origSize}):Play()
-        minBtn.Text="−"; task.wait(0.15); content.Visible=true
+        minBtn.Text="-"; task.wait(0.15); content.Visible=true
     end
 end)
 
--- ═══════════════════════════════════════
--- ПЛАВАЮЩАЯ КНОПКА (TOGGLE GUI)
--- ═══════════════════════════════════════
+-- ПЛАВАЮЩАЯ КНОПКА
 local floatBtn = Instance.new("TextButton")
-floatBtn.Name="Toggle"; floatBtn.Text="🚀"; floatBtn.Size=UDim2.new(0,50,0,50)
+floatBtn.Name="Toggle"; floatBtn.Text="RPG"; floatBtn.Size=UDim2.new(0,50,0,50)
 floatBtn.Position=UDim2.new(0,16,0.5,-25); floatBtn.BackgroundColor3=C.Bg
-floatBtn.TextColor3=C.Txt; floatBtn.Font=Enum.Font.SourceSans; floatBtn.TextSize=24
+floatBtn.TextColor3=C.Txt; floatBtn.Font=Enum.Font.GothamBlack; floatBtn.TextSize=12
 floatBtn.ZIndex=10; floatBtn.Active=true; floatBtn.Parent=gui
 corner(floatBtn,25); stroke(floatBtn,C.Glow,2,0.3)
 
@@ -797,7 +852,6 @@ fSh.ScaleType=Enum.ScaleType.Slice; fSh.SliceCenter=Rect.new(49,49,450,450)
 fSh.Size=UDim2.new(1,40,1,40); fSh.Position=UDim2.new(0,-20,0,-20)
 fSh.ZIndex=9; fSh.Parent=floatBtn
 
--- Drag для плавающей кнопки
 local fd,fdi,fds,fsp
 floatBtn.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -830,9 +884,7 @@ floatBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ═══════════════════════════════════════
 -- РЕСПАВН
--- ═══════════════════════════════════════
 plr.CharacterAdded:Connect(function(nc)
     char = nc
     hrp = nc:WaitForChild("HumanoidRootPart")
@@ -843,9 +895,7 @@ plr.CharacterAdded:Connect(function(nc)
     end
 end)
 
--- ═══════════════════════════════════════
--- ИНИЦИАЛИЗАЦИЯ + АВТО-ОБНОВЛЕНИЕ
--- ═══════════════════════════════════════
+-- ИНИЦИАЛИЗАЦИЯ
 refreshList()
 
 task.spawn(function()
